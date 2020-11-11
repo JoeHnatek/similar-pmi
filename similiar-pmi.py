@@ -57,6 +57,14 @@ def getCount(data):
 
     return counts
 
+def getCoWordTotal(data):
+
+    count = 0
+    for t in data:
+        for c in data[t]:
+            count += data[t][c]
+
+    return count
 
 def getTotalCount(data):
 
@@ -150,12 +158,12 @@ def createMatrix(data):
     dim = len(data)
     #print(dim)
     
-    pmiMatrix = numpy.zeros((dim, dim), int) # target (row) x context (col)
-
+    #pmiMatrix = numpy.empty((dim, dim), int) # target (row) x context (col)
+    pmiMatrix = [[0]*dim]*dim
     PMI_INDEX = {}
     INVERSE = {}
     index = 0
-
+    print("Matrix created...")
     for word in data:
         PMI_INDEX[word] = index
         INVERSE[index] = word
@@ -170,40 +178,48 @@ def createMatrix(data):
     return pmiMatrix, PMI_INDEX, INVERSE
 
 def calculatePMI(data, singleWordsCounts, totalCount, pmiMatrix, PMI_INDEX):
+    print("Calculating PMI...")
 
-    for target in singleWordsCounts:
+    """for target in singleWordsCounts:
         for context in singleWordsCounts:
             if target in data and context in data[target]:
-                if context in data[target]:
+                
+                p = data[target][context] / totalCount
 
-                    p = data[target][context] / (data[target][context])
+                p1 = singleWordsCounts[target] / totalCount
+                p2 = singleWordsCounts[context] / totalCount
 
-                    p1 = singleWordsCounts[target] / totalCount
-                    p2 = singleWordsCounts[context] / totalCount
+                #if PMI_INDEX[target] > 9999 or PMI_INDEX[context] > 9999:
+                    #   break
+                pmiMatrix[PMI_INDEX[target]][PMI_INDEX[context]] = math.log2(p/(p1*p2))"""
 
-                    #if PMI_INDEX[target] > 9999 or PMI_INDEX[context] > 9999:
-                     #   break
-                    pmiMatrix[PMI_INDEX[target]][PMI_INDEX[context]] = math.log2(p/(p1*p2))
+    for target in data:
+        for context in data[target]:
+            p = data[target][context] / totalCount
 
+            p1 = singleWordsCounts[target] / totalCount
+            p2 = singleWordsCounts[context] / totalCount
+
+            #if PMI_INDEX[target] > 9999 or PMI_INDEX[context] > 9999:
+                #   break
+            pmiMatrix[PMI_INDEX[target]][PMI_INDEX[context]] = math.log2(p/(p1*p2))
+
+    print("Done.")
     return pmiMatrix
 
 
 def computeCosine(pmiMatrix, PMI_INDEX, wordPairs, coWordCount, INVERSE):
     
     cosine = {}
-    print(coWordCount)
+    #print(coWordCount)
     for pair in wordPairs:
 
         target = pair[0]
         context = pair[1]
 
         if target not in PMI_INDEX or context not in PMI_INDEX:
-            cosine[tuple(pair)] = -999
+            cosine[tuple(pair)] = -9999
             continue
-
-        """if PMI_INDEX[target] > 10000 or PMI_INDEX[context] > 10000:
-            cosine[tuple(pair)] = 69
-            continue"""
         
         targetIndexRow = PMI_INDEX[target]
         contextIndexRow = PMI_INDEX[context]
@@ -245,7 +261,43 @@ def computeCosine(pmiMatrix, PMI_INDEX, wordPairs, coWordCount, INVERSE):
 
         cosine[tuple(pair)] = pairCosineValue
 
-    print(cosine)
+    #print(cosine)
+    return cosine
+
+
+def output(cosine, singleWordsCounts, coWordCount, pmiMatrix, PMI_INDEX):
+
+    #print(cosine)
+    for target, context in cosine:
+        
+        word1 = target
+        word2 = context
+
+        if word1 not in singleWordsCounts:
+            word1Count = 0
+        else:
+            word1Count = singleWordsCounts[word1]
+
+        if word2 not in singleWordsCounts:
+            word2Count = 0
+        else:
+            word2Count = singleWordsCounts[word2]
+
+        if word1 not in coWordCount or word2 not in coWordCount[word1]:
+            coWCount = 0
+        else:
+            coWCount = coWordCount[word1][word2]
+
+        if word1 not in PMI_INDEX or word2 not in PMI_INDEX:
+            pmi = '0' 
+        else:
+            pmi = pmiMatrix[PMI_INDEX[word1]][PMI_INDEX[word2]]
+
+        print("{:.5f} {} {} {} {} {} {:.5f}".format(float(cosine[(word1,word2)]), word1, word2, word1Count, word2Count, coWCount, float(pmi)), sep="\t")
+
+
+
+
 
 
 
@@ -256,24 +308,32 @@ def main(filepath, windowSize, wordPairsFile):
 
     totalCount = getTotalCount(singleWordsCounts)
 
+    print("Tokens = {:,}, Types = {:,}, Window = {}".format(totalCount, len(data), windowSize))
+
     wordPairs = getWordPairs(wordPairsFile)
 
     coWords = findCoWords(data, windowSize)
 
     coWordCount = getCoWordCount(coWords)
+    coWordTotal = getCoWordTotal(coWordCount)
+    print(coWordTotal)
+    
     pmiMatrix, PMI_INDEX, INVERSE = createMatrix(singleWordsCounts)
 
     pmiMatrixTrain = calculatePMI(coWordCount, singleWordsCounts, totalCount, pmiMatrix, PMI_INDEX)
 
     #print(pmiMatrix[PMI_INDEX["clinton"]][PMI_INDEX["clinton"]])
 
-    computeCosine(pmiMatrix, PMI_INDEX, wordPairs, coWordCount, INVERSE)
+    result = computeCosine(pmiMatrix, PMI_INDEX, wordPairs, coWordCount, INVERSE)
 
     #print(PMI_INDEX["clinton"])
 
+    output(result, singleWordsCounts, coWordCount, pmiMatrix, PMI_INDEX)
 
 if __name__ == "__main__":
     #print(sys.argv)
+
+    print("PA 4 computing similarity from a word by word PMI co-occurrence matrix, programmed by Joseph Hnatek.")
 
     windowSize = int(sys.argv[1])
     filepath = sys.argv[2]
